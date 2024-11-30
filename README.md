@@ -1,2 +1,4 @@
 ## Master branch is for Version_Android 
-### Version_Widnow matches Master branch
+
+ReliableCom in Eclipse.
+Version_Widnow matches Master branch.
