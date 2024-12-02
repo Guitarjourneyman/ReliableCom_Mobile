@@ -4,7 +4,7 @@ import java.io.*;
 import java.net.Socket;
 
 public class TcpSocketConnection {
-    private static final int PORT = 1955;
+    private static final int PORT = 49152;
     private Socket socket;
     private TCPSend client; // SenderViewModel �ν��Ͻ�
     
@@ -14,7 +14,9 @@ public class TcpSocketConnection {
         try {
             socket = new Socket(serverIP, PORT);
             client = new TCPSend(socket);
-
+            // UDPCheckThread 생성 및 실행
+            UDPCheckThread udpCheckThread = new UDPCheckThread(this, client);
+            new Thread(udpCheckThread).start();
 
             System.out.println("Server: " + serverIP + " is connected by TCP");
             System.out.println("My IP: " + socket.getLocalAddress());

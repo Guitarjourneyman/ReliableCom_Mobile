@@ -1,10 +1,17 @@
 package com.example.reliablecom.client_Source;
 
+
+
+import android.widget.TextView;
+
+import com.example.reliablecom.MainActivity;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 
 
@@ -12,11 +19,10 @@ public class UDPReceive {
 
     private static final int PORT = 1996;
     private static final int BUFFER_SIZE = 1024;
-    private static final int TOTAL_PACKETS = 61; // ��ü ��Ŷ �� (�ʿ信 �°� ����)
+    private static final int TOTAL_PACKETS = 63; // ��ü ��Ŷ �� (�ʿ信 �°� ����)
     private static final boolean MESSAGE_NUM = true;
     private static final boolean PACKET_NUM = false;
     //private JTextArea receivedMessagesArea;  // GUI�� receive message â
-    
     private static int receive_message_num = 0;
     private volatile boolean newMessageReceived_udp = false;
     public static int receivedMessageNum = 1; //���� �ް� �ִ� �޽��� ��ȣ
@@ -26,27 +32,17 @@ public class UDPReceive {
     //edit: Defined socket as a static 
     private static DatagramSocket socket;
     
-    public byte[] checkNewMessage; // ���� ��Ŷ�� üũ�ϴ� �迭
-    public byte[] lastMessage; // ���� �迭(�迭�� ��ȭ�� ������ ���� ack ����)
-    
-    
+    public static byte[] checkNewMessage; // ���� ��Ŷ�� üũ�ϴ� �迭
+    public static byte[] lastMessage; // ���� �迭(�迭�� ��ȭ�� ������ ���� ack ����)
+    public static byte[][] imageData; // 패킷 데이터를 저장할 배열
+
     // �����ڿ��� JTextArea ���� ����
     public UDPReceive() {
         //this.receivedMessagesArea = GUI.receivedMessagesArea;
-    
+
     }
     
-    public static int calculateBits(int total_packets, int mode) { //byte�迭�� ����ϱ� ������ ��Ŷ ���� 8�� ����� �ƴϸ� ������� �ʴ� bit�� ����
-        if (mode == 0) {
-            // mode�� 0�̸� byte �迭 �ε��� ���
-        	return (total_packets + 7) / 8;
-        } else if (mode == 1) {
-            // mode�� 1�̸� ������ ���� ��Ʈ ���� ���
-            return 8 - (total_packets % 8);
-        } else {
-            throw new IllegalArgumentException("Invalid mode: mode should be 0 or 1");
-        }
-    }
+
     
     //���� UDP �޽����� �� ��° �޽������� �����ϰ� �ִ� checkSerial ������ ����ϴ� �޼ҵ�
     public int Print_checkSerial() {
@@ -65,53 +61,50 @@ public class UDPReceive {
     public void resetNewMessageFlag() {
         newMessageReceived_udp = false;
     }
-    // getLeading�� true�� �ָ� "_"�� �������� ���� ���ڸ�, false�� �ָ� ���� ���ڸ� return��
+
+    // getLeading을 true로 주면 "_"를 기준으로 앞의 숫자를, false로 주면 뒤의 숫자를 return함
     public static int extractNumberPart(String input, boolean getLeading) {
-        // ���Խ��� ����Ͽ� ���ڿ� `_`�� �������� ���ڿ��� �и�
+        // 정규식을 사용하여 숫자와 `_`를 기준으로 문자열을 분리
         String[] parts = input.split("_");
 
-        if (parts.length == 2) {
-            String leadingNumber = parts[0].replaceAll("\\D", ""); // �պκ� ���ڸ� ����
-            String trailingNumber = parts[1].replaceAll("\\D", ""); // �޺κ� ���ڸ� ����
-           
-            // getLeading�� true�� ��� �պκ� ���� ��ȯ, false�� ��� �޺κ� ���� ��ȯ
-            String numberString = getLeading ? leadingNumber : trailingNumber;
-           
-            // �� ���ڿ��� ó���Ͽ� int�� ��ȯ
-            return numberString.isEmpty() ? 0 : Integer.parseInt(numberString);
-        } else {
-            // ������ ���� ���� ��� 0 ��ȯ
-            return 0;
+
+        String leadingNumber = parts[0].replaceAll("\\D", ""); // 앞부분 숫자만 추출
+
+        String trailingNumber = parts[1].replaceAll("\\D", ""); // 뒷부분 숫자만 추출
+
+        // getLeading이 true일 경우 앞부분 숫자 반환, false일 경우 뒷부분 숫자 반환
+        String numberString = getLeading ? leadingNumber : trailingNumber;
+
+        // 빈 문자열을 처리하여 int로 변환
+        return numberString.isEmpty() ? 0 : Integer.parseInt(numberString);
+
+
+    }
+
+    public static void initializePacketTracking() {
+        array_index = (TOTAL_PACKETS + 7) / 8;
+        ignored_bits = 8 - (TOTAL_PACKETS % 8);
+        checkNewMessage = new byte[array_index];
+        imageData = new byte[TOTAL_PACKETS][]; // 이미지 데이터 저장
+
+        // 무시할 비트 초기화
+        for (int i = array_index * 8 - ignored_bits + 1; i <= array_index * 8; i++) {
+            SetNewMsgBit(i, null, 0);
         }
+        lastMessage = checkNewMessage.clone();
     }
 
 
     public void startServer() {
-        socket = null;
-        array_index = calculateBits(TOTAL_PACKETS, 0);
-        ignored_bits = calculateBits(TOTAL_PACKETS, 1);
-        //��Ŷ ���� �´� �迭 ����
-        checkNewMessage = new byte[array_index]; // �׽�Ʈ�ϱ� ���� �̸� ����
-        
-        
-        //byte �迭 �ʱ�ȭ(�����ؾ��� ��Ʈ���� ��� 1��)
-        for(int i=array_index*8 - ignored_bits+1 ; i<= array_index*8; i++){
-        	SetNewMsgBit(i);     	
-        	} 
-        //lastMessage = new byte[array_index];
-        lastMessage = checkNewMessage.clone();
-        
         try {
+            initializePacketTracking();
             socket = new DatagramSocket(PORT);
             System.out.println("UDP Server started on port " + PORT + ". Waiting for messages...");
 
             // ���� ������ �޽��� ��� ����
             while (true) {
                 try {
-                    // ���� ����
                     byte[] buffer = new byte[BUFFER_SIZE];
-
-                    // ������ ��Ŷ ����
                     DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
 
                     // ������ ����
@@ -119,15 +112,9 @@ public class UDPReceive {
 
                     // ���ŵ� ������ ó��
                     String receivedMessage = new String(receivePacket.getData(), 0, receivePacket.getLength());
-
-                    // �۽��� IP �ּ� ��������
                     InetAddress senderAddress = receivePacket.getAddress();
                     String senderIP = senderAddress.getHostAddress();
-
-                    // ���� �ð��� hh:mm:ss.SSS �������� ��������
                     String timeStamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
-
-                    // �޽����� �պκ� 10���ڸ� �߶� ǥ��
                     String truncatedMessage = receivedMessage.length() > 10
                             ? receivedMessage.substring(0, 10)
                             : receivedMessage;
@@ -135,23 +122,32 @@ public class UDPReceive {
                     //int before =0;
                     // ���� �޽��� GUI�� ǥ��
                     receive_message_num++;
-              
                     //receivedMessagesArea.append("[" + receive_message_num + "] Received UDP message from " + senderIP + ": " + truncatedMessage + " [" + timeStamp + "]\n");
                     
-                    System.out.println("I got Message: " + truncatedMessage);
+                    //System.out.println("I got Message: " + truncatedMessage);
 
                     // �޽��� ��ȣ�� ��Ŷ ��ȣ ����
                     int message_num = extractNumberPart(truncatedMessage,MESSAGE_NUM);
                     int packet_num = extractNumberPart(truncatedMessage,PACKET_NUM);
-                    
-                    
-                    if (receivedMessageNum == message_num) { // �´� �޽��� ��ȣ�� ����
-                        
-               
-                    	//���� ��Ŷ ��ȣ�� �´� �迭�� index�� set
-                    	SetNewMsgBit(packet_num);
-                                                    
-                    } 
+
+
+                    // 유효한 패킷 번호인지 확인
+                    if (packet_num > 0 && packet_num <= TOTAL_PACKETS) {
+                        int headerLength = Integer.toString(message_num).length() + Integer.toString(packet_num).length() + 2; // "_" 문자 2개 포함
+                        byte[] imagePacketData = Arrays.copyOfRange(receivePacket.getData(), headerLength, receivePacket.getLength());
+
+                        // 패킷 번호가 10 이상이면 크기 조정
+                        if (packet_num >= 10) {
+                            byte[] extendedPacketData = new byte[imagePacketData.length + 1]; // 기존 크기 + 1
+                            System.arraycopy(imagePacketData, 0, extendedPacketData, 0, imagePacketData.length); // 기존 데이터 복사
+                            extendedPacketData[extendedPacketData.length - 1] = 0; // 마지막에 빈 공간(0) 추가
+                            imagePacketData = extendedPacketData; // 크기 조정된 배열로 업데이트
+                        }
+                        if (receivedMessageNum == message_num) {
+                            SetNewMsgBit(packet_num, imagePacketData, 1);
+
+                        }
+                    }
                     else {
                         System.out.println("Received wrong message");
                     }
@@ -185,52 +181,51 @@ public class UDPReceive {
         }
     }
 
-    public void startConnect_to_tcp() {
-        new Thread(() -> {
-            DatagramSocket socket = null;
-            try {
-                socket = new DatagramSocket(PORT);
-                System.out.println("UDP Server started on port " + PORT + ". Waiting for connect to TCP...");
+    public String startConnect_to_tcp() {
+        DatagramSocket socket = null;
+        try {
+            socket = new DatagramSocket(PORT);
+            System.out.println("UDP Server started on port " + PORT + ". Waiting for connect to tcp...");
 
-                // 메시지를 저장할 버퍼 생성
-                byte[] buffer = new byte[BUFFER_SIZE];
+            // 버퍼 생성
+            byte[] buffer = new byte[BUFFER_SIZE];
 
-                // 수신 패킷 생성
-                DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
+            // 수신할 패킷 생성
+            DatagramPacket receivePacket = new DatagramPacket(buffer, buffer.length);
 
-                // 클라이언트 메시지를 기다림 (수신)
-                socket.receive(receivePacket);
+            // 데이터 수신 (메시지가 올 때까지 대기)
+            socket.receive(receivePacket);
 
-                // 클라이언트의 IP 주소 가져오기
-                InetAddress senderAddress = receivePacket.getAddress();
-                String senderIP = senderAddress.getHostAddress();
+            // 송신자 IP 주소 가져오기
+            InetAddress senderAddress = receivePacket.getAddress();
+            String senderIP = senderAddress.getHostAddress();
 
-                // 유효한 IP 주소일 경우 출력
-                if (senderIP != null && !senderIP.isEmpty()) {
-                    System.out.println("This is serverIP: " + senderIP);
-                } else {
-                    System.out.println("No server IP received.");
-                }
-
-            } catch (SocketException e) {
-                System.out.println("Failed to bind UDP socket to port " + PORT + ": " + e.getMessage());
-            } catch (Exception e) {
-                System.out.println("Server startup error: " + e.getMessage());
-                e.printStackTrace();
-            } finally {
-                // 소켓을 닫아 리소스를 정리
-                if (socket != null && !socket.isClosed()) {
-                    socket.close();
-                    System.out.println("UDP Server socket closed.");
-                }
+            // IP 주소가 유효하면 반환, 유효하지 않으면 null 반환
+            if (senderIP != null && !senderIP.isEmpty()) {
+                System.out.println("This is serverIP: " + senderIP);
+                return senderIP;
+            } else {
+                System.out.println("No server IP");
+                return null;
             }
-        }).start(); // 스레드 시작
-
+        } catch (SocketException e) {
+            System.out.println("Failed to bind UDP socket to port " + PORT + ": " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("Server startup error: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            // 메시지를 수신한 후 소켓을 닫아 더 이상 메시지를 받지 않도록 함.
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+                System.out.println("UDP Server socket closed.");
+            }
+        }
+        return null; // 메시지를 수신하지 못했거나 오류 발생 시 null 반환
     }
 
 
     // ������ ��Ŷ ��ȣ�� �´� bit�� set ��Ŵ
-    public void SetNewMsgBit(int packet_num) {
+    public static void SetNewMsgBit(int packet_num,  byte[] imagePacketData, int mode) {
             // packet_num�� ��ġ�� �ش��ϴ� ��Ʈ�� ����(0��° ��Ʈ���� ä��)
             int byteIndex = (packet_num-1) / 8;   // �ش� ��Ʈ�� ���� ����Ʈ �ε���
             int bitIndex = (packet_num-1) % 8;    // �ش� ����Ʈ ���� ��Ʈ ��ġ
@@ -239,14 +234,29 @@ public class UDPReceive {
             if ((checkNewMessage[byteIndex] & (1 << bitIndex)) == 0) {
                 // ��Ʈ�� 0�̶�� 1�� ����
             	checkNewMessage[byteIndex] |= (1 << bitIndex);
-                System.out.println("Set checkNewMessage[" + packet_num + "]:");
-                UDPCheckThread.printByteArrayAsBinary(checkNewMessage); //�迭 ���    
+                //System.out.println("Set checkNewMessage[" + packet_num + "]:");
+                UDPCheckThread.printByteArrayAsBinary(checkNewMessage); //�迭 ���
+                if(mode ==1) {
+                    imageData[packet_num - 1] = imagePacketData; // 이미지 데이터 저장
+                    MainActivity.consoleArea.setText(receivedMessageNum + "번 메시지 패킷:\n" + appendByteArrayAsBinary(checkNewMessage));
+                }
             } else {
                 // �̹� ��Ʈ�� 1�� ���
-                System.out.println("checkNewMessage[" + packet_num + "] is already set to 1.");
+                //System.out.println("checkNewMessage[" + packet_num + "] is already set to 1.");
               }
            }
-    
+    public static String appendByteArrayAsBinary(byte[] byteArray) {
+        StringBuilder binaryOutput = new StringBuilder();
+        for (byte b : byteArray) {
+            // 각 byte 값을 이진 문자열로 변환
+            String binaryString = String.format("%8s", Integer.toBinaryString(b & 0xFF)).replace(' ', '0');
+            binaryOutput.append(binaryString).append("\n"); // 이진 문자열을 문자열에 추가
+        }
+
+        // 완성된 문자열을 반환
+        return binaryOutput.toString();
+    }
+
     //Server���� Reset ��û�� �� ��
     public static void closeUDPbyReset() {
     	socket.close();
