@@ -137,7 +137,7 @@ public void sendAckObject(byte[] byteArray) {
                 //Message num �ʱ�ȭ
                 UDPReceive.receivedMessageNum =1;
                 UDPReceive.closeUDPbyReset();
-                Main.receiver_udp = null;
+                Main.receiverUdp = null;
             } catch (IOException e) {
                 System.out.println("Connection closed.");
             }

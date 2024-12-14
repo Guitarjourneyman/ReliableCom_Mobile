@@ -5,8 +5,6 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-
-
     <Button
         android:id="@+id/btn_receive"
         android:layout_width="match_parent"
@@ -14,10 +12,18 @@
         android:layout_marginTop="16dp"
         android:text="Start Receive" />
 
+    <ImageView
+        android:id="@+id/image_view"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginTop="16dp"
+        android:background="@android:color/darker_gray"
+        android:contentDescription="Image Display" />
+
     <TextView
         android:id="@+id/console_area"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="200dp"
         android:layout_marginTop="16dp"
         android:textSize="14sp"
         android:background="@android:color/darker_gray"
